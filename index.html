@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>HaydiGo Duraklar</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+
+  <style>
+    html, body, #map { height: 100%; margin: 0; }
+    .controls {
+      position: absolute; z-index: 1000; top: 10px; left: 10px;
+      background: #fff; padding: 8px 10px; border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.15); display: flex; gap: 8px; align-items: center;
+      font: 14px system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    }
+    .controls button {
+      padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; background: #fff;
+    }
+    .controls .status { font-size: 12px; color: #666; }
+    .stop-popup { font: 12px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="controls">
+    <button id="btnNear">Yakınımı Göster</button>
+    <span class="status" id="status"></span>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <script>
+    const API = "http://localhost:8000";
+
+    const map = L.map('map', { zoomControl: true }).setView([41.01, 28.97], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+    const clusters = L.markerClusterGroup({ disableClusteringAtZoom: 16, maxClusterRadius: 50 }).addTo(map);
+    let routeLine = null, walkLine = null, meCircle = null;
+
+    const $near = document.getElementById('btnNear');
+    const $status = document.getElementById('status');
+    const setStatus = (t='') => { $status.textContent = t; };
+
+    let fetchTimer = null;
+    function scheduleFetch() {
+      if (fetchTimer) clearTimeout(fetchTimer);
+      fetchTimer = setTimeout(loadStopsByBBox, 250);
+    }
+
+    async function loadStopsByBBox() {
+      try {
+        setStatus('Yükleniyor…');
+        const b = map.getBounds();
+        const url = new URL(API + "/stops/geojson");
+        url.searchParams.set("minLon", b.getWest());
+        url.searchParams.set("minLat", b.getSouth());
+        url.searchParams.set("maxLon", b.getEast());
+        url.searchParams.set("maxLat", b.getNorth());
+        const z = map.getZoom();
+        url.searchParams.set("limit", z >= 15 ? 4000 : z >= 13 ? 3000 : 2000);
+
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Sunucu hatası");
+        const geo = await res.json();
+
+        clusters.clearLayers();
+        const markers = [];
+
+        for (const f of geo.features || []) {
+          if (!f.geometry || f.geometry.type !== "Point") continue;
+          const [lon, lat] = f.geometry.coordinates || [];
+          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
+
+          const p = f.properties || {};
+          const safe = (x) => (x === null || x === undefined) ? '-' : String(x);
+
+          const m = L.marker([lat, lon]);
+          m.bindPopup(
+            `<div class="stop-popup">
+              <b>${safe(p.name)}</b><br/>
+              Kod: ${safe(p.code)}<br/>
+              Yön: ${safe(p.direction)}<br/>
+              Tip: ${safe(p.stop_type)}<br/><br/>
+              <button onclick="routeFromHere(${lat}, ${lon})">Yol Tarifi Al</button>
+            </div>`
+          );
+          markers.push(m);
+        }
+        clusters.addLayers(markers);
+        setStatus(`${markers.length} durak`);
+      } catch (err) {
+        console.error(err);
+        setStatus('Yüklenemedi');
+      }
+    }
+
+    $near.addEventListener('click', () => {
+      if (!navigator.geolocation) return alert("Tarayıcı konumu desteklemiyor.");
+      $near.disabled = true; setStatus('Konum alınıyor…');
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        map.setView([lat, lon], 15);
+
+        if (meCircle) map.removeLayer(meCircle);
+        meCircle = L.circle([lat, lon], { radius: 6 }).addTo(map);
+
+        try {
+          const url = new URL(API + "/api/closest_stops");
+          url.searchParams.set("lat", lat);
+          url.searchParams.set("lon", lon);
+          url.searchParams.set("limit", 20);
+
+          const res = await fetch(url);
+          if (!res.ok) throw new Error("Sunucu hatası");
+          const data = await res.json();
+
+          clusters.clearLayers();
+          const markers = [];
+          for (const s of (data.stops || [])) {
+            if (!Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
+            const m = L.marker([s.lat, s.lon]);
+            m.bindPopup(
+              `<div class="stop-popup">
+                <b>${s.name ?? '-'}</b><br/>
+                <button onclick="routeFromHere(${s.lat}, ${s.lon})">Yol Tarifi Al</button>
+              </div>`
+            );
+            markers.push(m);
+          }
+          clusters.addLayers(markers);
+          setStatus(`Yakınındaki ${markers.length} durak`);
+        } catch (e) {
+          console.error(e);
+          alert("Yakın duraklar yüklenemedi.");
+          setStatus('Hata');
+        } finally {
+          $near.disabled = false;
+        }
+      }, (err) => {
+        alert("Konum izni verilmedi.");
+        console.warn(err);
+        setStatus('');
+        $near.disabled = false;
+      }, { enableHighAccuracy: true, timeout: 10000 });
+    });
+
+    window.routeFromHere = async function(lat, lon) {
+      if (!navigator.geolocation) return alert("Tarayıcı konumu desteklemiyor.");
+
+      navigator.geolocation.getCurrentPosition(async (pos) => {
+        const myLat = pos.coords.latitude;
+        const myLon = pos.coords.longitude;
+
+        try {
+          const url = new URL(API + "/api/route_coords");
+          url.searchParams.set("startLat", myLat);
+          url.searchParams.set("startLon", myLon);
+          url.searchParams.set("endLat", lat);
+          url.searchParams.set("endLon", lon);
+
+          const res = await fetch(url);
+          if (!res.ok) throw new Error("Sunucu hatası");
+          const data = await res.json();
+          if (!data.ok) return alert("Rota bulunamadı: " + (data.error || ''));
+
+          if (routeLine) map.removeLayer(routeLine);
+          if (walkLine)  map.removeLayer(walkLine);
+
+          walkLine = L.polyline([[myLat, myLon], [lat, lon]], { color: "blue", dashArray: "6,8", weight: 3 }).addTo(map);
+
+          if (data.type === "direct" && Array.isArray(data.shape) && data.shape.length > 0) {
+            routeLine = L.polyline(data.shape, { color: "red", weight: 4 }).addTo(map);
+            const grp = L.featureGroup([walkLine, routeLine]);
+            map.fitBounds(grp.getBounds(), { padding: [30, 30] });
+          } else {
+            map.fitBounds(walkLine.getBounds(), { padding: [30, 30] });
+            alert("Doğrudan tek hat bulunamadı (yalnızca yürüyüş çizildi).");
+          }
+        } catch (e) {
+          console.error(e);
+          alert("Rota alınamadı.");
+        }
+      }, () => alert("Konum izni verilmedi."), { enableHighAccuracy: true, timeout: 10000 });
+    };
+
+    map.on('load moveend zoomend', scheduleFetch);
+    scheduleFetch();
+  </script>
+</body>
+</html>

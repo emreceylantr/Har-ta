@@ -2,196 +2,288 @@
 <html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <title>HaydiGo Duraklar</title>
+  <title>HaydiGo — Duraklar & Rota</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"/>
 
   <style>
-    html, body, #map { height: 100%; margin: 0; }
-    .controls {
-      position: absolute; z-index: 1000; top: 10px; left: 10px;
-      background: #fff; padding: 8px 10px; border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0,0,0,.15); display: flex; gap: 8px; align-items: center;
-      font: 14px system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+    html, body, #map { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+    /* Panel (dokunma) */
+    .panel{position:absolute; top:12px; left:12px; z-index:1000; background:#fff; border-radius:14px; width:320px; box-shadow:0 6px 18px rgba(0,0,0,.18); overflow:hidden;}
+    .panel-header{background:#2f80ed; color:#fff; padding:12px 14px; font-weight:700;}
+    .panel-body{padding:12px; display:flex; flex-direction:column; gap:10px;}
+    .row{display:flex; flex-direction:column; gap:6px;}
+    label{font-size:12px; color:#374151; font-weight:600;}
+    input[type="text"]{width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; outline:none;}
+    input[type="text"]:focus{border-color:#2f80ed; box-shadow:0 0 0 3px rgba(47,128,237,.1);}
+    .btn{padding:10px 12px; border:0; border-radius:10px; cursor:pointer; font-weight:700;}
+    .btn-primary{background:#2f80ed; color:#fff;} .btn-primary:hover{background:#2564b8;}
+    .btn-ghost{background:#eef2ff; color:#1f2937;} .btn-ghost:hover{background:#e0e7ff;}
+    .btn-muted{background:#f3f4f6; color:#374151;} .btn-muted:hover{background:#e5e7eb;}
+    .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+    .route-info{display:none; margin-top:2px; font-size:14px; background:#f9fafb; padding:8px; border-radius:8px; border:1px solid #e5e7eb;}
+
+    /* Sağ alttaki toolbar */
+    .toolbar{position:absolute; right:12px; bottom:12px; z-index:1000; background:#fff; padding:8px 10px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); display:flex; align-items:center; gap:10px;}
+    .toolbar label{display:flex; align-items:center; gap:6px; font-size:14px; color:#111827;}
+
+    /* Durak ve canlı konum ikonları */
+    .stop-pin{width:24px;height:24px;border-radius:50%;background:#2f80ed;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #0e3ea3;}
+    .stop-pin::after{content:"🚌";}
+
+    /* Yanıp sönen yeşil canlı konum */
+    .me-pin{position:relative; width:18px; height:18px; border-radius:50%; background:#10b981; border:2px solid #065f46; box-shadow:0 0 0 2px rgba(16,185,129,.25);}
+    .me-pin::after{
+      content:""; position:absolute; left:50%; top:50%;
+      width:16px; height:16px; border-radius:50%;
+      transform:translate(-50%,-50%); background:rgba(16,185,129,.35);
+      animation:pulse 1.6s ease-out infinite;
     }
-    .controls button {
-      padding: 6px 10px; border: 1px solid #ddd; border-radius: 6px; cursor: pointer; background: #fff;
+    @keyframes pulse{
+      0%{transform:translate(-50%,-50%) scale(1); opacity:.9;}
+      70%{transform:translate(-50%,-50%) scale(2.6); opacity:0;}
+      100%{opacity:0;}
     }
-    .controls .status { font-size: 12px; color: #666; }
-    .stop-popup { font: 12px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial; }
+
+    /* Popup içi */
+    .popup-title{font-weight:700; margin-bottom:4px;}
+    .popup-nav-btn{margin-top:6px; padding:7px 10px; border:0; border-radius:8px; background:#2f80ed; color:#fff; font-weight:700; cursor:pointer;}
+    .popup-nav-btn:hover{background:#2564b8;}
+    .lines-title{margin:6px 0 2px; font-weight:700;}
+    .lines-list{margin:4px 0 0; padding-left:18px;}
+
+    /* Küçük bildirim */
+    .toast{position:absolute; top:12px; right:12px; z-index:1100; background:#111827; color:#fff; padding:10px 12px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.2); font-size:14px; display:none;}
   </style>
 </head>
 <body>
-  <div id="map"></div>
-
-  <div class="controls">
-    <button id="btnNear">Yakınımı Göster</button>
-    <span class="status" id="status"></span>
+  <div class="panel" role="region" aria-label="Rota paneli">
+    <div class="panel-header">🧭 Rota Çiz</div>
+    <div class="panel-body">
+      <div class="row">
+        <label for="startInput">Başlangıç</label>
+        <div class="grid-2">
+          <input id="startInput" type="text" placeholder="Taksim Meydanı"/>
+          <button id="useLoc" class="btn btn-ghost" title="Konumumu kullan">📍</button>
+        </div>
+      </div>
+      <div class="row">
+        <label for="destInput">Varış</label>
+        <input id="destInput" type="text" placeholder="Galata Kulesi"/>
+      </div>
+      <div class="grid-2">
+        <button id="drawBtn"  class="btn btn-primary">Rota Çiz</button>
+        <button id="clearBtn" class="btn btn-muted">Temizle</button>
+      </div>
+      <div id="routeInfo" class="route-info" role="status" aria-live="polite"></div>
+    </div>
   </div>
+
+  <div class="toolbar">
+    <button id="nearBtn" class="btn btn-ghost" title="Yakınlaş">Yakınım (Canlı)</button>
+    <label><input type="checkbox" id="toggleStops" checked/> Duraklar</label>
+  </div>
+
+  <div id="map" aria-label="Harita"></div>
+  <div id="toast" class="toast"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
 
   <script>
-    const API = "http://localhost:8000";
+    const API_BASE = "http://localhost:8000";
+    const OSRM_URL = "https://router.project-osrm.org/route/v1"; // demo (profil: car)
 
-    const map = L.map('map', { zoomControl: true }).setView([41.01, 28.97], 12);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    const map = L.map("map",{zoomControl:false}).setView([41.01,28.97],12);
+    L.control.zoom({position:"bottomleft"}).addTo(map);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19, attribution:'&copy; OpenStreetMap'}).addTo(map);
 
-    const clusters = L.markerClusterGroup({ disableClusteringAtZoom: 16, maxClusterRadius: 50 }).addTo(map);
-    let routeLine = null, walkLine = null, meCircle = null;
+    const clusters = L.markerClusterGroup({ disableClusteringAtZoom: 16 }).addTo(map);
+    const stopIcon = L.divIcon({ className:"stop-pin", iconSize:[24,24] });
+    const meIcon   = L.divIcon({ className:"me-pin", iconSize:[18,18] }); // pulsing live marker
 
-    const $near = document.getElementById('btnNear');
-    const $status = document.getElementById('status');
-    const setStatus = (t='') => { $status.textContent = t; };
+    let startCoord=null, destCoord=null, meMarker=null, showStops=true;
+    let stopsAbort=null, geoWatchId=null;
 
-    let fetchTimer = null;
-    function scheduleFetch() {
-      if (fetchTimer) clearTimeout(fetchTimer);
-      fetchTimer = setTimeout(loadStopsByBBox, 250);
-    }
+    const $  = s => document.querySelector(s);
+    const $$ = s => document.querySelectorAll(s);
+    const h = s => String(s ?? "").replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    const toast = (msg, ms=2200) => { const t=$("#toast"); t.textContent=msg; t.style.display="block"; clearTimeout(t._tid); t._tid=setTimeout(()=>t.style.display="none", ms); };
 
-    async function loadStopsByBBox() {
-      try {
-        setStatus('Yükleniyor…');
-        const b = map.getBounds();
-        const url = new URL(API + "/stops/geojson");
-        url.searchParams.set("minLon", b.getWest());
-        url.searchParams.set("minLat", b.getSouth());
-        url.searchParams.set("maxLon", b.getEast());
-        url.searchParams.set("maxLat", b.getNorth());
-        const z = map.getZoom();
-        url.searchParams.set("limit", z >= 15 ? 4000 : z >= 13 ? 3000 : 2000);
+    // Rota — OSRM demo, car profili
+    const router = L.Routing.control({
+      position:"topright",
+      waypoints:[],
+      collapsible:true,
+      addWaypoints:false,
+      router: L.Routing.osrmv1({ serviceUrl: OSRM_URL, profile: "car" })
+    })
+    .on("routesfound", e => {
+      const r = e.routes[0];
+      const km = (r.summary.totalDistance/1000).toFixed(2);
+      const min = Math.round(r.summary.totalTime/60);
+      const info = $("#routeInfo");
+      info.innerHTML = `📏 Mesafe: <b>${km} km</b><br>⏱️ Süre: <b>${min} dk</b>`;
+      info.style.display = "block";
+    })
+    .on("routingerror", () => toast("Rota bulunamadı."))
+    .addTo(map);
 
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Sunucu hatası");
-        const geo = await res.json();
-
-        clusters.clearLayers();
-        const markers = [];
-
-        for (const f of geo.features || []) {
-          if (!f.geometry || f.geometry.type !== "Point") continue;
-          const [lon, lat] = f.geometry.coordinates || [];
-          if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-
-          const p = f.properties || {};
-          const safe = (x) => (x === null || x === undefined) ? '-' : String(x);
-
-          const m = L.marker([lat, lon]);
-          m.bindPopup(
-            `<div class="stop-popup">
-              <b>${safe(p.name)}</b><br/>
-              Kod: ${safe(p.code)}<br/>
-              Yön: ${safe(p.direction)}<br/>
-              Tip: ${safe(p.stop_type)}<br/><br/>
-              <button onclick="routeFromHere(${lat}, ${lon})">Yol Tarifi Al</button>
-            </div>`
-          );
-          markers.push(m);
-        }
-        clusters.addLayers(markers);
-        setStatus(`${markers.length} durak`);
-      } catch (err) {
-        console.error(err);
-        setStatus('Yüklenemedi');
+    const maybeRoute = () => {
+      if (startCoord && destCoord) {
+        router.setWaypoints([
+          L.latLng(startCoord.lat, startCoord.lon),
+          L.latLng(destCoord.lat, destCoord.lon)
+        ]);
       }
-    }
-
-    $near.addEventListener('click', () => {
-      if (!navigator.geolocation) return alert("Tarayıcı konumu desteklemiyor.");
-      $near.disabled = true; setStatus('Konum alınıyor…');
-
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        const lat = pos.coords.latitude, lon = pos.coords.longitude;
-        map.setView([lat, lon], 15);
-
-        if (meCircle) map.removeLayer(meCircle);
-        meCircle = L.circle([lat, lon], { radius: 6 }).addTo(map);
-
-        try {
-          const url = new URL(API + "/api/closest_stops");
-          url.searchParams.set("lat", lat);
-          url.searchParams.set("lon", lon);
-          url.searchParams.set("limit", 20);
-
-          const res = await fetch(url);
-          if (!res.ok) throw new Error("Sunucu hatası");
-          const data = await res.json();
-
-          clusters.clearLayers();
-          const markers = [];
-          for (const s of (data.stops || [])) {
-            if (!Number.isFinite(s.lat) || !Number.isFinite(s.lon)) continue;
-            const m = L.marker([s.lat, s.lon]);
-            m.bindPopup(
-              `<div class="stop-popup">
-                <b>${s.name ?? '-'}</b><br/>
-                <button onclick="routeFromHere(${s.lat}, ${s.lon})">Yol Tarifi Al</button>
-              </div>`
-            );
-            markers.push(m);
-          }
-          clusters.addLayers(markers);
-          setStatus(`Yakınındaki ${markers.length} durak`);
-        } catch (e) {
-          console.error(e);
-          alert("Yakın duraklar yüklenemedi.");
-          setStatus('Hata');
-        } finally {
-          $near.disabled = false;
-        }
-      }, (err) => {
-        alert("Konum izni verilmedi.");
-        console.warn(err);
-        setStatus('');
-        $near.disabled = false;
-      }, { enableHighAccuracy: true, timeout: 10000 });
-    });
-
-    window.routeFromHere = async function(lat, lon) {
-      if (!navigator.geolocation) return alert("Tarayıcı konumu desteklemiyor.");
-
-      navigator.geolocation.getCurrentPosition(async (pos) => {
-        const myLat = pos.coords.latitude;
-        const myLon = pos.coords.longitude;
-
-        try {
-          const url = new URL(API + "/api/route_coords");
-          url.searchParams.set("startLat", myLat);
-          url.searchParams.set("startLon", myLon);
-          url.searchParams.set("endLat", lat);
-          url.searchParams.set("endLon", lon);
-
-          const res = await fetch(url);
-          if (!res.ok) throw new Error("Sunucu hatası");
-          const data = await res.json();
-          if (!data.ok) return alert("Rota bulunamadı: " + (data.error || ''));
-
-          if (routeLine) map.removeLayer(routeLine);
-          if (walkLine)  map.removeLayer(walkLine);
-
-          walkLine = L.polyline([[myLat, myLon], [lat, lon]], { color: "blue", dashArray: "6,8", weight: 3 }).addTo(map);
-
-          if (data.type === "direct" && Array.isArray(data.shape) && data.shape.length > 0) {
-            routeLine = L.polyline(data.shape, { color: "red", weight: 4 }).addTo(map);
-            const grp = L.featureGroup([walkLine, routeLine]);
-            map.fitBounds(grp.getBounds(), { padding: [30, 30] });
-          } else {
-            map.fitBounds(walkLine.getBounds(), { padding: [30, 30] });
-            alert("Doğrudan tek hat bulunamadı (yalnızca yürüyüş çizildi).");
-          }
-        } catch (e) {
-          console.error(e);
-          alert("Rota alınamadı.");
-        }
-      }, () => alert("Konum izni verilmedi."), { enableHighAccuracy: true, timeout: 10000 });
     };
 
-    map.on('load moveend zoomend', scheduleFetch);
-    scheduleFetch();
+    async function geocode(q){
+      const u=`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1`;
+      const r=await fetch(u); if(!r.ok) return null;
+      const j=await r.json(); if(!j[0]) return null;
+      return {lat:+j[0].lat,lon:+j[0].lon};
+    }
+
+    // Duraklar
+    const loadStops = async () => {
+      clusters.clearLayers();
+      if (!showStops) return;
+      if (stopsAbort) stopsAbort.abort();
+      stopsAbort = new AbortController();
+
+      const b = map.getBounds();
+      const url = new URL(API_BASE + "/stops/geojson");
+      url.searchParams.set("minLon", b.getWest());
+      url.searchParams.set("maxLon", b.getEast());
+      url.searchParams.set("minLat", b.getSouth());
+      url.searchParams.set("maxLat", b.getNorth());
+      url.searchParams.set("limit", 2000);
+
+      try{
+        const r = await fetch(url, { signal: stopsAbort.signal });
+        if(!r.ok){ toast("Duraklar yüklenemedi."); return; }
+        const g = await r.json();
+        (g.features||[]).forEach(f=>{
+          if(f.geometry?.type!=="Point") return;
+          const [lon,lat]=f.geometry.coordinates;
+          const name = h(f.properties?.name || "-");
+          const sid  = f.properties?.id || f.properties?.stop_id;
+
+          const m=L.marker([lat,lon],{icon:stopIcon});
+          m.bindPopup(`
+            <div>
+              <div class="popup-title">${name}</div>
+              <div class="lines-title">🚍 Hatlar</div>
+              <div class="stop-lines" data-stop="${h(sid)}">Yükleniyor...</div>
+              <button class="popup-nav-btn" data-lat="${lat}" data-lon="${lon}" data-name="${name}" type="button">🧭 Yol tarifi al</button>
+            </div>
+          `);
+          clusters.addLayer(m);
+        });
+      }catch(e){
+        if(e.name!=="AbortError") toast("Durak isteği iptal edildi/başarısız.");
+      }
+    };
+    let moveTid=null;
+    map.on("moveend",()=>{ clearTimeout(moveTid); moveTid=setTimeout(loadStops,200); });
+    loadStops();
+
+    // Popup açılınca: hatları getir + Yol tarifi al butonuna tık davranışı
+    map.on("popupopen", async (e)=>{
+      const root=e.popup.getElement(); if(!root) return;
+
+      // Yol tarifi al
+      const navBtn=root.querySelector(".popup-nav-btn");
+      if(navBtn){
+        navBtn.onclick=()=>{
+          // Varış = durak
+          destCoord={lat:+navBtn.dataset.lat, lon:+navBtn.dataset.lon};
+          $("#destInput").value=navBtn.dataset.name||"Durak";
+
+          // Başlangıç = canlı konum
+          if(!("geolocation" in navigator)){ toast("Tarayıcı konumu desteklemiyor."); return; }
+          navigator.geolocation.getCurrentPosition(pos=>{
+            startCoord={lat:pos.coords.latitude, lon:pos.coords.longitude};
+            $("#startInput").value="Konumum";
+            // Rota çiz
+            maybeRoute();
+            // Popup'ı kapat
+            map.closePopup();
+          }, ()=>toast("Konum izni gerekli."), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+        };
+      }
+
+      // Hatlar
+      const div=root.querySelector(".stop-lines");
+      if(!div) return;
+      const stopId=div.getAttribute("data-stop");
+      if(!stopId){div.textContent="Durak ID yok."; return;}
+      try{
+        const resp=await fetch(`${API_BASE}/stops/${encodeURIComponent(stopId)}/lines`);
+        if(!resp.ok) throw 0;
+        const data=await resp.json();
+        const arr=data?.lines||[];
+        div.innerHTML = arr.length
+          ? `<ul class="lines-list">${arr.map(l=>`<li><b>${h(l.code??"-")}</b>${l.name?" – "+h(l.name):""}</li>`).join("")}</ul>`
+          : "Bu duraktan geçen hat yok.";
+      }catch{
+        div.textContent="Hatlar yüklenemedi.";
+      }
+    });
+
+    // Canlı konum (yanıp sönen)
+    const startLiveLocate = ()=>{
+      if(!("geolocation" in navigator)){ toast("Tarayıcı konumu desteklemiyor."); return; }
+      if(geoWatchId) return;
+      geoWatchId = navigator.geolocation.watchPosition(pos=>{
+        const lat=pos.coords.latitude, lon=pos.coords.longitude;
+        if(!meMarker){
+          meMarker = L.marker([lat,lon], { icon: meIcon }).addTo(map).bindTooltip("Canlı konum");
+          map.setView([lat,lon], 15);
+        }else{
+          meMarker.setLatLng([lat,lon]);
+        }
+      }, ()=>toast("Konum alınamadı."), { enableHighAccuracy:true, maximumAge:5000, timeout:10000 });
+    };
+
+    // UI
+    $("#toggleStops").onchange=e=>{ showStops=e.target.checked; loadStops(); };
+    $("#nearBtn").onclick = startLiveLocate;
+
+    $("#useLoc").onclick=()=>navigator.geolocation.getCurrentPosition(pos=>{
+      startCoord={lat:pos.coords.latitude,lon:pos.coords.longitude};
+      $("#startInput").value="Konumum";
+      if(!meMarker){
+        meMarker = L.marker([startCoord.lat,startCoord.lon], { icon: meIcon }).addTo(map).bindTooltip("Canlı konum");
+      }else{
+        meMarker.setLatLng([startCoord.lat,startCoord.lon]);
+      }
+    },()=>toast("Konum izni gerekli."));
+
+    $("#drawBtn").onclick=async()=>{
+      if(!startCoord){
+        const s=$("#startInput").value.trim();
+        if(s) startCoord=await geocode(s);
+      }
+      if(!destCoord){
+        const d=$("#destInput").value.trim();
+        if(d) destCoord=await geocode(d);
+      }
+      if(!startCoord || !destCoord){ toast("Başlangıç ve varış gerekli."); return; }
+      maybeRoute();
+    };
+
+    $("#clearBtn").onclick=()=>{
+      startCoord=destCoord=null;
+      $("#startInput").value=""; $("#destInput").value="";
+      router.setWaypoints([]); $("#routeInfo").style.display="none";
+    };
   </script>
 </body>
 </html>

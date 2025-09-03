@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>HaydiGo — Duraklar & Rota</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Harita & Eklenti CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"/>
+
+  <!-- Proje CSS -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Hat Arama -->
+  <div class="route-search" role="region" aria-label="Hat Arama">
+    <input id="routeInput" type="text" placeholder="Hat kodu (örn. 40T, 500T)"/>
+    <button id="routeSearchBtn">Ara</button>
+  </div>
+
+  <!-- Sol panel: Rota -->
+  <div class="panel" role="region" aria-label="Rota paneli">
+    <div class="panel-header">🧭 Rota Çiz</div>
+    <div class="panel-body">
+      <div class="row">
+        <label>Duraklar (sürükleyip sırala)</label>
+        <div id="wpList" class="wp-list">
+          <!-- Başlangıç -->
+          <div class="wp-item" data-key="start">
+            <div class="drag" title="Sürükle"></div>
+            <div class="grid-2">
+              <input id="startInput" type="text" placeholder="Başlangıç (örn. Taksim)"/>
+              <button id="useLoc" class="btn btn-ghost" title="Konumumu kullan">📍</button>
+            </div>
+            <button class="del" title="Sil" disabled>✕</button>
+          </div>
+
+          <!-- Varış -->
+          <div class="wp-item" data-key="dest" id="destItem">
+            <div class="drag" title="Sürükle"></div>
+            <input id="destInput" type="text" placeholder="Varış (örn. Kabataş)"/>
+            <button class="del" title="Sil" disabled>✕</button>
+          </div>
+        </div>
+
+        <button id="addStop" class="btn btn-ghost" type="button" style="width:max-content">➕ Hedef ekle</button>
+        <div class="muted">İpucu: Rotadaki işaretçileri harita üzerinde de sürükleyebilirsin.</div>
+      </div>
+
+      <div class="grid-2">
+        <button id="drawBtn"  class="btn btn-primary">Rota Çiz</button>
+        <button id="clearBtn" class="btn btn-muted">Temizle</button>
+      </div>
+
+      <div id="routeInfo" class="route-info" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button id="nearBtn" class="btn btn-ghost" title="Yakınlaş">Yakınım (Canlı)</button>
+    <label><input type="checkbox" id="toggleStops" checked/> Duraklar</label>
+  </div>
+
+  <div id="map"></div>
+  <div id="toast" class="toast"></div>
+
+  <!-- Harita & Eklenti JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+  <script src="https://unpkg.com/sortablejs@1.15.2/Sortable.min.js"></script>
+
+  <!-- Proje JS -->
+  <script src="app.js" defer></script>
+</body>
+</html>

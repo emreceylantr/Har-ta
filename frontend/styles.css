@@ -1,0 +1,46 @@
+html, body, #map { height:100%; margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+.panel{position:absolute; top:12px; left:12px; z-index:1000; background:#fff; border-radius:14px; width:360px; box-shadow:0 6px 18px rgba(0,0,0,.18); overflow:hidden;}
+.panel-header{background:#2f80ed; color:#fff; padding:12px 14px; font-weight:700;}
+.panel-body{padding:12px; display:flex; flex-direction:column; gap:10px;}
+.row{display:flex; flex-direction:column; gap:6px;}
+label{font-size:12px; color:#374151; font-weight:600;}
+input[type="text"]{width:100%; padding:10px 12px; border:1px solid #e5e7eb; border-radius:10px; outline:none;}
+input[type="text"]:focus{border-color:#2f80ed; box-shadow:0 0 0 3px rgba(47,128,237,.1);}
+.btn{padding:10px 12px; border:0; border-radius:10px; cursor:pointer; font-weight:700;}
+.btn-primary{background:#2f80ed; color:#fff;} .btn-primary:hover{background:#2564b8;}
+.btn-ghost{background:#eef2ff; color:#1f2937;} .btn-ghost:hover{background:#e0e7ff;}
+.btn-muted{background:#f3f4f6; color:#374151;} .btn-muted:hover{background:#e5e7eb;}
+.grid-2{display:grid; grid-template-columns:1fr 1fr; gap:8px;}
+.route-info{display:none; margin-top:2px; font-size:14px; background:#f9fafb; padding:8px; border-radius:8px; border:1px solid #e5e7eb;}
+
+/* waypoint item + drag handle */
+.wp-item{display:grid; grid-template-columns:auto 1fr auto; gap:8px; align-items:center; padding:2px 0;}
+.drag{width:40px; height:40px; border:1px solid #e5e7eb; border-radius:10px; display:flex; align-items:center; justify-content:center; cursor:grab; user-select:none; background:#fff;}
+.drag:active{cursor:grabbing;}
+.drag::before{content:"⋮⋮"; letter-spacing:2px; color:#6b7280; font-weight:700;}
+.del{border:1px solid #e5e7eb; background:#fff; border-radius:10px; padding:0 10px; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer;}
+.del:hover{background:#f3f4f6;}
+
+.muted{color:#6b7280; font-size:12px;}
+.toolbar{position:absolute; right:12px; bottom:12px; z-index:1000; background:#fff; padding:8px 10px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); display:flex; align-items:center; gap:10px;}
+.toolbar label{display:flex; align-items:center; gap:6px; font-size:14px; color:#111827;}
+
+/* Durak & konum pinleri */
+.stop-pin{width:24px;height:24px;border-radius:50%;background:#2f80ed;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #0e3ea3;}
+.stop-pin::after{content:"🚌";}
+.me-pin{position:relative; width:18px; height:18px; border-radius:50%; background:#10b981; border:2px solid #065f46; box-shadow:0 0 0 2px rgba(16,185,129,.25);}
+.me-pin::after{content:""; position:absolute; left:50%; top:50%; width:16px; height:16px; border-radius:50%; transform:translate(-50%,-50%); background:rgba(16,185,129,.35); animation:pulse 1.6s ease-out infinite;}
+@keyframes pulse{0%{transform:translate(-50%,-50%) scale(1); opacity:.9;}70%{transform:translate(-50%,-50%) scale(2.6); opacity:0;}100%{opacity:0;}}
+
+.popup-title{font-weight:700; margin-bottom:4px;}
+.popup-nav-btn{margin-top:6px; padding:7px 10px; border:0; border-radius:8px; background:#2f80ed; color:#fff; font-weight:700; cursor:pointer;}
+.lines-title{margin:6px 0 2px; font-weight:700;}
+.lines-list{margin:4px 0 0; padding-left:18px;}
+
+.toast{position:absolute; top:12px; right:12px; z-index:1100; background:#111827; color:#fff; padding:10px 12px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.2); font-size:14px; display:none;}
+
+/* Hat arama */
+.route-search{position:absolute; top:12px; right:12px; z-index:1001; background:#fff; padding:10px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); display:flex; gap:6px; align-items:center;}
+.route-search input{padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px;}
+.route-search button{padding:8px 12px; border:0; border-radius:10px; background:#2f80ed; color:#fff; font-weight:700; cursor:pointer;}

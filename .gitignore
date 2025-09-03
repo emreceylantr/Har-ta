@@ -1,0 +1,20 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# IDE/OS
+.vscode/
+.DS_Store
+
+# Env
+.env
+backend/.env
+
+# Build/temp
+dist/
+build/
+
+__pycache__/
+*.pyc
+

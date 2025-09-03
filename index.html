@@ -40,6 +40,7 @@
     .toolbar{position:absolute; right:12px; bottom:12px; z-index:1000; background:#fff; padding:8px 10px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); display:flex; align-items:center; gap:10px;}
     .toolbar label{display:flex; align-items:center; gap:6px; font-size:14px; color:#111827;}
 
+    /* Durak & konum pinleri */
     .stop-pin{width:24px;height:24px;border-radius:50%;background:#2f80ed;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid #0e3ea3;}
     .stop-pin::after{content:"🚌";}
     .me-pin{position:relative; width:18px; height:18px; border-radius:50%; background:#10b981; border:2px solid #065f46; box-shadow:0 0 0 2px rgba(16,185,129,.25);}
@@ -52,9 +53,21 @@
     .lines-list{margin:4px 0 0; padding-left:18px;}
 
     .toast{position:absolute; top:12px; right:12px; z-index:1100; background:#111827; color:#fff; padding:10px 12px; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,.2); font-size:14px; display:none;}
+
+    /* Hat arama kutusu (sağ üst) */
+    .route-search{position:absolute; top:12px; right:12px; z-index:1001; background:#fff; padding:10px; border-radius:12px; box-shadow:0 4px 16px rgba(0,0,0,.15); display:flex; gap:6px; align-items:center;}
+    .route-search input{padding:8px 10px; border:1px solid #e5e7eb; border-radius:10px;}
+    .route-search button{padding:8px 12px; border:0; border-radius:10px; background:#2f80ed; color:#fff; font-weight:700; cursor:pointer;}
   </style>
 </head>
 <body>
+  <!-- Hat Arama -->
+  <div class="route-search" role="region" aria-label="Hat Arama">
+    <input id="routeInput" type="text" placeholder="Hat kodu (örn. 40T, 500T)"/>
+    <button id="routeSearchBtn">Ara</button>
+  </div>
+
+  <!-- Sol panel: Rota -->
   <div class="panel" role="region" aria-label="Rota paneli">
     <div class="panel-header">🧭 Rota Çiz</div>
     <div class="panel-body">
@@ -120,6 +133,9 @@
     const clusters = (L.markerClusterGroup ? L.markerClusterGroup({ disableClusteringAtZoom: 16 }) : L.layerGroup()).addTo(map);
     const stopIcon = L.divIcon({ className:"stop-pin", iconSize:[24,24] });
     const meIcon   = L.divIcon({ className:"me-pin", iconSize:[18,18] });
+
+    // Hat çizgileri için katman
+    const hatLayer = L.layerGroup().addTo(map);
 
     const start = { key:"start", input: document.getElementById("startInput"), coord: null };
     const dest  = { key:"dest",  input: document.getElementById("destInput"),  coord: null };
@@ -236,7 +252,7 @@
               <div class="popup-title">${name}</div>
               <div class="lines-title">🚍 Hatlar</div>
               <div class="stop-lines" data-stop="${sid}">Yükleniyor...</div>
-              <button class="popup-nav-btn" data-lat="${lat}" data-lon="${lon}" data-name="${name}" type="button">🧭 Yol tarifi al</button>
+              <button class="popup-nav-btn" data-lat="${lat}" data-lon="${lon}" data-name="${name}" data-stop="${sid}" type="button">🧭 Yol tarifi al</button>
             </div>`);
           clusters.addLayer(m);
         });
@@ -246,24 +262,8 @@
 
     map.on("popupopen", async (e)=>{
       const root=e.popup.getElement(); if(!root) return;
-      const navBtn=root.querySelector(".popup-nav-btn");
-      if(navBtn){
-        navBtn.onclick=()=>{
-          dest.input.value = navBtn.dataset.name || "Durak";
-          dest.coord = { lat:+navBtn.dataset.lat, lon:+navBtn.dataset.lon };
-          if("geolocation" in navigator){
-            navigator.geolocation.getCurrentPosition(pos=>{
-              start.input.value="Konumum";
-              start.coord={lat:pos.coords.latitude,lon:pos.coords.longitude};
-              maybeRoute(); map.closePopup();
-            }, async ()=>{
-              const s=start.input.value.trim();
-              if(s){ start.coord=await geocode(s); maybeRoute(); map.closePopup(); }
-              else toast("Başlangıç girin veya konumu açın.");
-            }, {enableHighAccuracy:true, maximumAge:5000, timeout:10000});
-          } else toast("Başlangıç için adres girin.");
-        };
-      }
+
+      // Hat listesi
       const div=root.querySelector(".stop-lines");
       if(div){
         const stopId=div.getAttribute("data-stop");
@@ -275,6 +275,38 @@
             ? `<ul class="lines-list">${arr.map(l=>`<li><b>${l.code??"-"}</b>${l.name?" – "+l.name:""}</li>`).join("")}</ul>`
             : "Bu duraktan geçen hat yok.";
         }catch{ div.textContent="Hatlar yüklenemedi."; }
+      }
+
+      // Yol tarifi + hat önerisi (konuma en yakın durak → tıklanan durak)
+      const navBtn=root.querySelector(".popup-nav-btn");
+      if(navBtn){
+        navBtn.onclick=()=>{
+          const destLat=+navBtn.dataset.lat, destLon=+navBtn.dataset.lon;
+          const stopId=navBtn.dataset.stop;
+          dest.input.value = navBtn.dataset.name || "Durak";
+          dest.coord = { lat:destLat, lon:destLon };
+
+          if("geolocation" in navigator){
+            navigator.geolocation.getCurrentPosition(async pos=>{
+              start.input.value="Konumum";
+              const sLat=pos.coords.latitude, sLon=pos.coords.longitude;
+              start.coord={lat:sLat,lon:sLon};
+              maybeRoute(); map.closePopup();
+
+              // En yakın başlangıç durağını bul + iki durak arasında hatları sor
+              const fromStopId = await findNearestStopId(sLat, sLon);
+              if(fromStopId){
+                await suggestTransit(fromStopId, stopId);
+              } else {
+                toast("Yakın durak bulunamadı.");
+              }
+            }, async ()=>{
+              const s=start.input.value.trim();
+              if(s){ start.coord=await geocode(s); maybeRoute(); map.closePopup(); }
+              else toast("Başlangıç girin veya konumu açın.");
+            }, {enableHighAccuracy:true, maximumAge:5000, timeout:10000});
+          } else toast("Başlangıç için adres girin.");
+        };
       }
     });
 
@@ -313,7 +345,75 @@
       });
       via.splice(0);
       router.setWaypoints([]); $("#routeInfo").style.display="none";
+      hatLayer.clearLayers(); // hat çizgilerini de temizle
     };
+
+    /* ---------- Hat Arama ---------- */
+    document.getElementById("routeSearchBtn").onclick = async ()=>{
+      const q=document.getElementById("routeInput").value.trim();
+      if(!q){ toast("Hat kodu gir."); return; }
+      hatLayer.clearLayers();
+      try{
+        const r=await fetch(`${API_BASE}/routes/search?q=${encodeURIComponent(q)}`);
+        const j=await r.json();
+        const list = j.results || (j.ok && j.hat ? [j.hat] : []);
+        if(!j.ok || !list.length){ toast("Hat bulunamadı."); return; }
+        const best=list[0];
+        // best.guzergah -> [{lat,lon}] veya [[lon,lat]...]
+        const coords = (best.guzergah||[]).map(c =>
+          Array.isArray(c) ? [c[1],c[0]] : [c.lat, c.lon]
+        );
+        if(!coords.length){ toast("Bu hat için güzergah verisi yok."); return; }
+        const line=L.polyline(coords,{color:"red", weight:5, opacity:.85}).addTo(hatLayer);
+        map.fitBounds(line.getBounds());
+        toast(`Çizildi: ${best.hat_kodu||q}`);
+      }catch(e){ toast("Hat arama hata verdi."); }
+    };
+
+    /* ---------- En yakın durak bul + hat önerisi ---------- */
+    async function findNearestStopId(lat,lon){
+      const delta=0.02; // ~2km civarı
+      const url=new URL(API_BASE+"/stops/geojson");
+      url.searchParams.set("minLon", (lon-delta));
+      url.searchParams.set("maxLon", (lon+delta));
+      url.searchParams.set("minLat", (lat-delta));
+      url.searchParams.set("maxLat", (lat+delta));
+      url.searchParams.set("limit", 1000);
+      try{
+        const r=await fetch(url); if(!r.ok) return null;
+        const g=await r.json(); const feats=g.features||[];
+        if(!feats.length) return null;
+        let best=null, bestD=1e18;
+        for(const f of feats){
+          const [LON,LAT]=f.geometry.coordinates;
+          const d=haversine(lat,lon,LAT,LON);
+          if(d<bestD){ bestD=d; best=f; }
+        }
+        return best?.properties?.id || best?.properties?.stop_id || null;
+      }catch{ return null; }
+    }
+
+    function haversine(lat1,lon1,lat2,lon2){
+      const toRad=d=>d*Math.PI/180;
+      const R=6371000;
+      const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+      const a=Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+      return 2*R*Math.asin(Math.sqrt(a));
+    }
+
+    async function suggestTransit(fromStopId, toStopId){
+      try{
+        const r=await fetch(`${API_BASE}/routes/between?from=${encodeURIComponent(fromStopId)}&to=${encodeURIComponent(toStopId)}`);
+        const j=await r.json();
+        if(!j.results || !j.results.length){ toast("Bu iki durak arasında hat bulunamadı."); return; }
+        const best=j.results[0];
+        hatLayer.clearLayers();
+        const coords=(best.guzergah||[]).map(c=>Array.isArray(c)?[c[1],c[0]]:[c.lat,c.lon]);
+        const line=L.polyline(coords,{color:"blue", weight:5, opacity:0.8}).addTo(hatLayer);
+        map.fitBounds(line.getBounds());
+        toast(`Toplu taşıma önerisi: ${best.hat_kodu}`);
+      }catch{ toast("Hat önerisi alınamadı."); }
+    }
   </script>
 </body>
 </html>

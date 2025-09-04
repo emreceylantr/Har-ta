@@ -26,7 +26,7 @@ def geocode(text: str) -> Optional[Tuple[float, float]]:
     except requests.RequestException:
         return None
 
-def haversine(lat1, lon1, lat2, lon2) -> float:
+def haversine(lat1, lon1, lat2, lon2) -> float:         
     from math import radians, sin, cos, asin, sqrt
     r_earth = 6371000.0
     dlat = radians(lat2 - lat1)

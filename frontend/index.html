@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <title>HaydiGo — Duraklar & Rota</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
 
   <!-- Harita & Eklenti CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -12,7 +12,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"/>
 
   <!-- Proje CSS -->
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
   <!-- Hat Arama -->
@@ -59,9 +59,19 @@
     </div>
   </div>
 
+  <!-- Sağ alt: araç çubuğu -->
   <div class="toolbar">
     <button id="nearBtn" class="btn btn-ghost" title="Yakınlaş">Yakınım (Canlı)</button>
     <label><input type="checkbox" id="toggleStops" checked/> Duraklar</label>
+
+    <!-- ⭐️ Yeni: harita görünümü seçici -->
+    <select id="basemapSel" title="Harita görünümü" style="padding:8px;border:1px solid #e5e7eb;border-radius:10px;">
+      <option value="streets">Sokak haritası</option>
+      <option value="satellite">Uydu</option>
+      <option value="hybrid">Uydu (etiketli)</option>
+      <option value="dark">Karanlık</option>
+      <option value="topo">Topo</option>
+    </select>
   </div>
 
   <div id="map"></div>

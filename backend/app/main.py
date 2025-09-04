@@ -7,7 +7,7 @@ from .api import health, stops, routes
 
 app = FastAPI(title="HaydiGo API", version="1.0")
 
-# CORS (prod'da allow_origins'i domaine kısıtla)
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Endpoint grupları
+# Endpoint
 app.include_router(health.router)
 app.include_router(stops.router)
 app.include_router(routes.router)
